@@ -1,0 +1,61 @@
+variables:
+  PUSH_IMAGE_REPOSITORY: "registry.cn-shenzhen.aliyuncs.com/utek/fbox-web"
+
+before_script:
+  - echo $CI_JOB_NAME
+  - echo $CI_PROJECT_DIR
+  - echo $CI_UPDATE_SERVICE
+  - echo $CD_TENV_SERVICE_NAME
+  - echo $CD_TENV_COMPOSE_DIR
+  - echo $CD_UPDATE_IMAGE
+  - echo $CD_TENV_MACHINE_NAME
+  # More Predefined variables (Environment variables) see https://docs.gitlab.com/ce/ci/variables/README.html
+
+stages:
+  - build
+  # - cleanup
+  # - test
+  - deploy
+
+build:docker-image:
+  stage: build
+  only:
+    - dev
+    - dev2
+    - /^(rel|fix)-.*$/
+  script:
+    - docker image build --network=host --force-rm --no-cache -t ${PUSH_IMAGE_REPOSITORY}:${CI_COMMIT_REF_NAME} .
+    # - docker image push ${PUSH_IMAGE_REPOSITORY}:${CI_COMMIT_REF_NAME}
+    - docker image save  ${PUSH_IMAGE_REPOSITORY}:${CI_COMMIT_REF_NAME} -o web.tar
+    - docker image rmi ${PUSH_IMAGE_REPOSITORY}:${CI_COMMIT_REF_NAME}
+    - scp web.tar 192.168.3.210:~
+    - rm web.tar
+  tags:
+    - build
+    - docker
+
+build:docker-image-rel:
+  stage: build
+  only:
+    - master
+    - tags
+  script:
+    - docker image build --network=host --force-rm --no-cache -t ${PUSH_IMAGE_REPOSITORY}:${CI_COMMIT_REF_NAME} .
+    # - docker image push ${PUSH_IMAGE_REPOSITORY}:${CI_COMMIT_REF_NAME}
+    - docker image save  ${PUSH_IMAGE_REPOSITORY}:${CI_COMMIT_REF_NAME} -o web.tar
+    - docker image rmi ${PUSH_IMAGE_REPOSITORY}:${CI_COMMIT_REF_NAME}
+    - scp web.tar 192.168.3.210:~
+    - rm web.tar
+  tags:
+    - build
+    - docker
+
+deploy:update-service:
+  stage: deploy
+  only:
+    - dev
+    - dev2
+  script:
+    - ./deploy/updateService.sh ${COMPOSE_PRJ_DIR} ${CI_COMMIT_REF_NAME} 
+  tags:
+    - deploy
